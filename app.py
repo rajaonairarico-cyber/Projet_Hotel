@@ -3,15 +3,17 @@ app.py
 ------
 Application de Gestion d'Hôtel — entièrement en Python (Flask + SQLite).
 
-Lancement :
+Lancement local :
     python app.py
 Puis ouvrir : http://127.0.0.1:5000
 Compte de démonstration : admin / admin123
 """
 
+import os
 from datetime import datetime, date
 from functools import wraps
 import re
+import io
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
 from werkzeug.security import check_password_hash
@@ -20,7 +22,7 @@ from database import get_db, init_db
 from pdf_recu import generer_recu_pdf
 
 app = Flask(__name__)
-app.secret_key = "change-moi-en-production"  # à remplacer par une vraie clé secrète
+app.secret_key = os.environ.get("SECRET_KEY", "dev_key_temporaire_pas_securise")
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +163,6 @@ def modifier_client(cid):
 @login_required
 def supprimer_client(cid):
     db = get_db()
-    # Vérifier si le client a encore une réservation en cours ou non payée
     active = db.execute(
         """
         SELECT COUNT(*) AS n FROM reservation
@@ -259,7 +260,6 @@ def reservations():
         """
     ).fetchall()
     tous_clients = db.execute("SELECT * FROM client WHERE archivee = 0 ORDER BY nom").fetchall()
-    # Chambres libres + la chambre déjà réservée (utile en cas de modification future)
     chambres_dispo = db.execute(
         "SELECT * FROM chambre WHERE statut='libre' ORDER BY numero"
     ).fetchall()
@@ -347,13 +347,11 @@ def payer_reservation(rid):
     montant = float(request.form.get("montant", res["montant_total"]))
     mode = request.form.get("mode", "especes")
 
-    # Enregistre le paiement
     db.execute(
         "INSERT INTO paiement (reservation_id, montant, date_paiement, mode) VALUES (?,?,?,?)",
         (rid, montant, date.today().isoformat(), mode),
     )
 
-    # Total déjà payé pour cette réservation
     total_paye = db.execute(
         "SELECT COALESCE(SUM(montant), 0) AS t FROM paiement WHERE reservation_id=?",
         (rid,),
@@ -410,7 +408,6 @@ def recu_reservation(rid):
     }
 
     pdf = generer_recu_pdf(donnees)
-    import io
     return send_file(
         io.BytesIO(pdf),
         mimetype="application/pdf",
@@ -515,6 +512,12 @@ def retirer_reservation(rid):
     return redirect(url_for("reservations_archives"))
 
 
+# ---------------------------------------------------------------------------
+# INITIALISATION (exécutée par Gunicorn au démarrage)
+# ---------------------------------------------------------------------------
+init_db()
+
+
 if __name__ == "__main__":
-    init_db()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
