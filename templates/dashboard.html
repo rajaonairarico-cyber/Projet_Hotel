@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% set active = 'dashboard' %}
+{% block title %}Dashboard{% endblock %}
+{% block heading %}📊 Tableau de bord{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+  <div class="p-5 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
+    <div class="flex items-center gap-3">
+      <span class="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center"><i class="fas fa-users"></i></span>
+      <div>
+        <p class="text-xs text-gray-500 dark:text-gray-400">Clients</p>
+        <p class="text-xl font-bold text-gray-800 dark:text-white">{{ nb_clients }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="p-5 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
+    <div class="flex items-center gap-3">
+      <span class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-300 flex items-center justify-center"><i class="fas fa-bed"></i></span>
+      <div>
+        <p class="text-xs text-gray-500 dark:text-gray-400">Chambres libres</p>
+        <p class="text-xl font-bold text-gray-800 dark:text-white">{{ nb_libres }} / {{ nb_chambres }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="p-5 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
+    <div class="flex items-center gap-3">
+      <span class="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center"><i class="fas fa-calendar-check"></i></span>
+      <div>
+        <p class="text-xs text-gray-500 dark:text-gray-400">Réservations actives</p>
+        <p class="text-xl font-bold text-gray-800 dark:text-white">{{ nb_reservations }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="p-5 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
+    <div class="flex items-center gap-3">
+      <span class="w-10 h-10 rounded-lg bg-yellow-100 dark:bg-yellow-900/40 text-yellow-600 dark:text-yellow-300 flex items-center justify-center"><i class="fas fa-coins"></i></span>
+      <div>
+        <p class="text-xs text-gray-500 dark:text-gray-400">Revenu total</p>
+        <p class="text-xl font-bold text-gray-800 dark:text-white">{{ "%.0f"|format(revenu_total) }} Ar</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="mt-8 text-xs text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-gray-700 pt-4">
+  
+</div>
+{% endblock %}
