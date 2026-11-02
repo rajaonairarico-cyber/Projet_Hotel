@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% set active = 'reservations' %}
+{% block title %}Réservations{% endblock %}
+{% block heading %}📅 Gestion des Réservations{% endblock %}
+
+{% block content %}
+<div class="mb-4 flex items-center gap-3">
+  <button onclick="document.getElementById('reservationFormContainer').classList.toggle('hidden')"
+          class="bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg transition">
+    <i class="fas fa-plus mr-1"></i> Ajouter une réservation
+  </button>
+  <a href="{{ url_for('reservations_archives') }}"
+     class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg transition">
+    <i class="fas fa-archive mr-1"></i> Archives
+  </a>
+</div>
+
+<div id="reservationFormContainer" class="hidden mb-6 p-4 border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700/50">
+  <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3">Nouvelle réservation</h3>
+  <form method="POST" action="{{ url_for('ajouter_reservation') }}" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Client</label>
+      <select name="client_id" required class="w-full px-3 py-2 border rounded-lg dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+        <option value="">-- Choisir --</option>
+        {% for c in tous_clients %}
+        <option value="{{ c['id_client'] }}">{{ c['nom'] }} {{ c['prenom'] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Chambre disponible</label>
+      <select name="chambre_id" required class="w-full px-3 py-2 border rounded-lg dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+        <option value="">-- Choisir --</option>
+        {% for c in chambres_dispo %}
+        <option value="{{ c['id_chambre'] }}">N°{{ c['numero'] }} — {{ c['type'] }} ({{ "%.0f"|format(c['prix_nuit']) }} Ar/nuit)</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Date début</label>
+      <input type="date" name="date_debut" required min="{{ today }}"
+             onchange="document.getElementById('dateFin').min = this.value;"
+             class="w-full px-3 py-2 border rounded-lg dark:bg-gray-600 dark:border-gray-500 dark:text-white" />
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Date fin</label>
+      <input type="date" name="date_fin" required id="dateFin" min="{{ today }}"
+             class="w-full px-3 py-2 border rounded-lg dark:bg-gray-600 dark:border-gray-500 dark:text-white" />
+    </div>
+    <div class="flex items-end gap-2">
+      <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">Enregistrer</button>
+      <button type="button" onclick="document.getElementById('reservationFormContainer').classList.add('hidden')"
+              class="bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-white px-4 py-2 rounded-lg transition">Annuler</button>
+    </div>
+  </form>
+</div>
+
+<div class="overflow-x-auto bg-white dark:bg-gray-700 rounded-xl shadow">
+  <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+    <thead class="bg-gray-50 dark:bg-gray-600">
+      <tr>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">ID</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Client</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Chambre</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Début</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Fin</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Nuits</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Total</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Paiement</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Statut</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-600">
+      {% for r in reservations %}
+      <tr class="hover:bg-gray-50 dark:hover:bg-gray-600">
+        <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">{{ r['id_reservation'] }}</td>
+        <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">{{ r['client_nom'] }} {{ r['client_prenom'] }}</td>
+        <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">N°{{ r['chambre_numero'] }} ({{ r['chambre_type'] }})</td>
+        <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">{{ r['date_debut'] }}</td>
+        <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">{{ r['date_fin'] }}</td>
+        <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">{{ r['nb_nuits'] }}</td>
+        <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">{{ "%.0f"|format(r['montant_total']) }} Ar</td>
+        <td class="px-6 py-4 text-sm">
+          <span class="px-2 py-1 rounded-full text-xs {{ 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200' if r['paye'] else 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200' }}">
+            {{ 'Payé' if r['paye'] else 'Non payé' }}
+          </span>
+        </td>
+        <td class="px-6 py-4 text-sm">
+          <span class="px-2 py-1 rounded-full text-xs {{ 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200' if r['statut'] == 'confirmee' else 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200' if r['statut'] == 'terminee' else 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200' }}">{{ r['statut'] }}</span>
+        </td>
+        <td class="px-6 py-4 text-sm font-medium space-x-3 whitespace-nowrap">
+          {% if not r['paye'] %}
+          <button type="button" onclick="ouvrirPaiement({{ r['id_reservation'] }}, {{ "%.0f"|format(r['montant_total']) }})"
+                  class="text-green-600 dark:text-green-400 hover:underline"><i class="fas fa-money-bill-wave"></i></button>
+          {% endif %}
+          <a href="{{ url_for('recu_reservation', rid=r['id_reservation']) }}" class="text-amber-700 dark:text-amber-500 hover:underline"><i class="fas fa-file-pdf"></i></a>
+          {% if r['statut'] == 'confirmee' %}
+          <form method="POST" action="{{ url_for('terminer_reservation', rid=r['id_reservation']) }}" class="inline"
+                onsubmit="return confirm('Terminer la location ? La chambre sera libérée.');">
+            <button type="submit" class="text-amber-700 dark:text-amber-500 hover:underline"><i class="fas fa-door-open"></i></button>
+          </form>
+          {% endif %}
+          <form method="POST" action="{{ url_for('archiver_reservation', rid=r['id_reservation']) }}" class="inline"
+                onsubmit="return confirm('Archiver cette réservation ? La chambre sera libérée.');">
+            <button type="submit" class="text-yellow-600 dark:text-yellow-400 hover:underline"><i class="fas fa-archive"></i></button>
+          </form>
+          <form method="POST" action="{{ url_for('supprimer_reservation', rid=r['id_reservation']) }}" class="inline"
+                onsubmit="return confirm('Supprimer cette réservation ?');">
+            <button type="submit" class="text-red-600 dark:text-red-400 hover:underline"><i class="fas fa-trash"></i></button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">Aucune réservation.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Modale de paiement -->
+<div id="paiementModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+  <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl w-full max-w-sm">
+    <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">Enregistrer le paiement</h3>
+    <form method="POST" id="paiementForm" action="" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Montant (Ar)</label>
+        <input type="number" name="montant" id="paiementMontant" required min="1"
+               class="w-full px-3 py-2 border rounded-lg dark:bg-gray-600 dark:border-gray-500 dark:text-white" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Mode de paiement</label>
+        <select name="mode" class="w-full px-3 py-2 border rounded-lg dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+          <option value="especes">Espèces</option>
+          <option value="mobile_money">Mobile Money</option>
+          <option value="carte">Carte bancaire</option>
+        </select>
+      </div>
+      <div class="flex items-end gap-2">
+        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">Confirmer le paiement</button>
+        <button type="button" onclick="document.getElementById('paiementModal').classList.add('hidden')"
+                class="bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-white px-4 py-2 rounded-lg transition">Annuler</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function ouvrirPaiement(rid, total) {
+  document.getElementById('paiementMontant').value = total;
+  document.getElementById('paiementForm').action = '/reservations/payer/' + rid;
+  document.getElementById('paiementModal').classList.remove('hidden');
+}
+</script>
+{% endblock %}
