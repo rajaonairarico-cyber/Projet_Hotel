@@ -11,6 +11,7 @@ Compte administrateur : défini via ADMIN_USERNAME / ADMIN_PASSWORD.
 
 import os
 import secrets
+import unicodedata
 from datetime import datetime, date
 from functools import wraps
 import re
@@ -336,6 +337,25 @@ def supprimer_chambre(chid):
 # ---------------------------------------------------------------------------
 # RÉSERVATIONS
 # ---------------------------------------------------------------------------
+PAYE_TERMS = {"paye", "payee", "payes", "payees", "1"}
+NON_PAYE_TERMS = {"non paye", "non payee", "nonpaye", "nonpayee", "impaye", "impayee", "0"}
+
+
+def normaliser(valeur):
+    texte = "" if valeur is None else str(valeur)
+    texte = unicodedata.normalize("NFD", texte)
+    texte = "".join(c for c in texte if unicodedata.category(c) != "Mn")
+    return texte.replace("–", " ").replace("—", " ").replace("-", " ").lower().strip()
+
+
+def redirect_reservations():
+    return redirect(url_for(
+        "reservations",
+        q=request.args.get("q", ""),
+        paye=request.args.get("paye", ""),
+    ))
+
+
 @app.route("/reservations")
 @login_required
 def reservations():
@@ -356,6 +376,43 @@ def reservations():
         "SELECT * FROM chambre WHERE statut='libre' ORDER BY numero"
     ).fetchall()
     db.close()
+
+    q = request.args.get("q", "").strip()
+    filtre_paiement = request.args.get("paye", "").strip().lower()
+    if filtre_paiement not in ("", "paye", "non-paye"):
+        filtre_paiement = ""
+
+    nq = normaliser(q)
+    terme_paiement = nq in PAYE_TERMS or nq in NON_PAYE_TERMS
+    if not filtre_paiement and nq in PAYE_TERMS:
+        filtre_paiement = "paye"
+    elif not filtre_paiement and nq in NON_PAYE_TERMS:
+        filtre_paiement = "non-paye"
+
+    total_reservations = len(liste)
+    payees_count = sum(1 for r in liste if r["paye"])
+    non_payees_count = total_reservations - payees_count
+
+    if filtre_paiement == "paye":
+        liste = [r for r in liste if r["paye"]]
+    elif filtre_paiement == "non-paye":
+        liste = [r for r in liste if not r["paye"]]
+
+    if nq and not terme_paiement:
+        liste = [r for r in liste if any(
+            nq in normaliser(valeur) for valeur in (
+                r["id_reservation"],
+                r["client_nom"],
+                r["client_prenom"],
+                r["chambre_numero"],
+                r["chambre_type"],
+                r["date_debut"],
+                r["date_fin"],
+                r["statut"],
+                "Payé" if r["paye"] else "Non payé",
+            )
+        )]
+
     today = date.today().isoformat()
     return render_template(
         "reservations.html",
@@ -363,6 +420,11 @@ def reservations():
         tous_clients=tous_clients,
         chambres_dispo=chambres_dispo,
         today=today,
+        q="" if terme_paiement else q,
+        filtre_paiement=filtre_paiement,
+        total_reservations=total_reservations,
+        payees_count=payees_count,
+        non_payees_count=non_payees_count,
     )
 
 
@@ -379,7 +441,7 @@ def ajouter_reservation():
     if not chambre:
         db.close()
         flash("Cette chambre n'est plus disponible.")
-        return redirect(url_for("reservations"))
+        return redirect_reservations()
 
     debut = datetime.strptime(d["date_debut"], "%Y-%m-%d")
     fin = datetime.strptime(d["date_fin"], "%Y-%m-%d")
@@ -387,12 +449,12 @@ def ajouter_reservation():
     if debut.date() < date.today():
         db.close()
         flash("La date de début ne peut pas être dans le passé.")
-        return redirect(url_for("reservations"))
+        return redirect_reservations()
 
     if fin <= debut:
         db.close()
         flash("La date de fin doit être après la date de début.")
-        return redirect(url_for("reservations"))
+        return redirect_reservations()
 
     nb_nuits = max((fin - debut).days, 1)
     montant = nb_nuits * float(chambre["prix_nuit"])
@@ -406,7 +468,7 @@ def ajouter_reservation():
     db.execute("UPDATE chambre SET statut='occupee' WHERE id_chambre=?", (d["chambre_id"],))
     db.commit()
     db.close()
-    return redirect(url_for("reservations"))
+    return redirect_reservations()
 
 
 @app.route("/reservations/supprimer/<int:rid>", methods=["POST"])
@@ -421,7 +483,7 @@ def supprimer_reservation(rid):
     db.execute("DELETE FROM reservation WHERE id_reservation=?", (rid,))
     db.commit()
     db.close()
-    return redirect(url_for("reservations"))
+    return redirect_reservations()
 
 
 # ---------------------------------------------------------------------------
@@ -434,7 +496,7 @@ def payer_reservation(rid):
     res = db.execute("SELECT * FROM reservation WHERE id_reservation=?", (rid,)).fetchone()
     if not res:
         db.close()
-        return redirect(url_for("reservations"))
+        return redirect_reservations()
 
     montant = float(request.form.get("montant", res["montant_total"]))
     mode = request.form.get("mode", "especes")
@@ -454,7 +516,7 @@ def payer_reservation(rid):
     db.commit()
     db.close()
     flash("Paiement enregistré avec succès.")
-    return redirect(url_for("reservations"))
+    return redirect_reservations()
 
 
 @app.route("/reservations/recu/<int:rid>")
@@ -474,7 +536,7 @@ def recu_reservation(rid):
     ).fetchone()
     if not res:
         db.close()
-        return redirect(url_for("reservations"))
+        return redirect_reservations()
 
     total_paye = db.execute(
         "SELECT COALESCE(SUM(montant), 0) AS t FROM paiement WHERE reservation_id=?",
@@ -524,7 +586,7 @@ def terminer_reservation(rid):
         db.commit()
     db.close()
     flash("Réservation terminée, la chambre est maintenant libre.")
-    return redirect(url_for("reservations"))
+    return redirect_reservations()
 
 
 @app.route("/clients/archives")
@@ -590,7 +652,7 @@ def archiver_reservation(rid):
     db.commit()
     db.close()
     flash("Réservation archivée, la chambre est libre.")
-    return redirect(url_for("reservations"))
+    return redirect_reservations()
 
 
 @app.route("/reservations/retirer/<int:rid>", methods=["POST"])

@@ -15,9 +15,42 @@
   </a>
 </div>
 
+<form method="GET" action="{{ url_for('reservations') }}" class="mb-4 flex flex-wrap items-center gap-2">
+  <div class="relative flex-1 min-w-[260px]">
+    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+    <input type="search" name="q" value="{{ q }}"
+           placeholder="Rechercher : client, chambre, payé, non payé…"
+           class="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-amber-500" />
+  </div>
+  <input type="hidden" name="paye" value="{{ filtre_paiement }}" />
+  <button type="submit" class="bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg transition">
+    <i class="fas fa-magnifying-glass mr-1"></i> Rechercher
+  </button>
+  {% if q or filtre_paiement %}
+  <a href="{{ url_for('reservations') }}" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-white font-medium py-2 px-4 rounded-lg transition">
+    Réinitialiser
+  </a>
+  {% endif %}
+</form>
+
+<div class="mb-4 flex flex-wrap gap-2">
+  <a href="{{ url_for('reservations', q=q, paye='') }}"
+     class="px-3 py-2 rounded-lg text-sm font-medium transition {{ 'bg-amber-600 text-white' if not filtre_paiement else 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-500' }}">
+    Tous ({{ total_reservations }})
+  </a>
+  <a href="{{ url_for('reservations', q=q, paye='paye') }}"
+     class="px-3 py-2 rounded-lg text-sm font-medium transition {{ 'bg-amber-600 text-white' if filtre_paiement == 'paye' else 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-500' }}">
+    Payés ({{ payees_count }})
+  </a>
+  <a href="{{ url_for('reservations', q=q, paye='non-paye') }}"
+     class="px-3 py-2 rounded-lg text-sm font-medium transition {{ 'bg-amber-600 text-white' if filtre_paiement == 'non-paye' else 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-500' }}">
+    Non payés ({{ non_payees_count }})
+  </a>
+</div>
+
 <div id="reservationFormContainer" class="hidden mb-6 p-4 border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700/50">
   <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3">Nouvelle réservation</h3>
-  <form method="POST" action="{{ url_for('ajouter_reservation') }}" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <form method="POST" action="{{ url_for('ajouter_reservation', q=q, paye=filtre_paiement) }}" class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <div>
       <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Client</label>
       <select name="client_id" required class="w-full px-3 py-2 border rounded-lg dark:bg-gray-600 dark:border-gray-500 dark:text-white">
@@ -91,21 +124,21 @@
         </td>
         <td class="px-6 py-4 text-sm font-medium space-x-3 whitespace-nowrap">
           {% if not r['paye'] %}
-          <button type="button" onclick="ouvrirPaiement({{ r['id_reservation'] }}, {{ "%.0f"|format(r['montant_total']) }})"
+          <button type="button" onclick="ouvrirPaiement({{ r['id_reservation'] }}, {{ "%.0f"|format(r['montant_total']) }}, {{ q|tojson }}, {{ filtre_paiement|tojson }})"
                   class="text-green-600 dark:text-green-400 hover:underline"><i class="fas fa-money-bill-wave"></i></button>
           {% endif %}
           <a href="{{ url_for('recu_reservation', rid=r['id_reservation']) }}" class="text-amber-700 dark:text-amber-500 hover:underline"><i class="fas fa-file-pdf"></i></a>
           {% if r['statut'] == 'confirmee' %}
-          <form method="POST" action="{{ url_for('terminer_reservation', rid=r['id_reservation']) }}" class="inline"
+          <form method="POST" action="{{ url_for('terminer_reservation', rid=r['id_reservation'], q=q, paye=filtre_paiement) }}" class="inline"
                 onsubmit="return confirm('Terminer la location ? La chambre sera libérée.');">
             <button type="submit" class="text-amber-700 dark:text-amber-500 hover:underline"><i class="fas fa-door-open"></i></button>
           </form>
           {% endif %}
-          <form method="POST" action="{{ url_for('archiver_reservation', rid=r['id_reservation']) }}" class="inline"
+          <form method="POST" action="{{ url_for('archiver_reservation', rid=r['id_reservation'], q=q, paye=filtre_paiement) }}" class="inline"
                 onsubmit="return confirm('Archiver cette réservation ? La chambre sera libérée.');">
             <button type="submit" class="text-yellow-600 dark:text-yellow-400 hover:underline"><i class="fas fa-archive"></i></button>
           </form>
-          <form method="POST" action="{{ url_for('supprimer_reservation', rid=r['id_reservation']) }}" class="inline"
+          <form method="POST" action="{{ url_for('supprimer_reservation', rid=r['id_reservation'], q=q, paye=filtre_paiement) }}" class="inline"
                 onsubmit="return confirm('Supprimer cette réservation ?');">
             <button type="submit" class="text-red-600 dark:text-red-400 hover:underline"><i class="fas fa-trash"></i></button>
           </form>
@@ -146,9 +179,10 @@
 </div>
 
 <script>
-function ouvrirPaiement(rid, total) {
+function ouvrirPaiement(rid, total, q, paye) {
   document.getElementById('paiementMontant').value = total;
-  document.getElementById('paiementForm').action = '/reservations/payer/' + rid;
+  document.getElementById('paiementForm').action = '/reservations/payer/' + rid +
+    '?q=' + encodeURIComponent(q || '') + '&paye=' + encodeURIComponent(paye || '');
   document.getElementById('paiementModal').classList.remove('hidden');
 }
 </script>
