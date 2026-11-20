@@ -16,7 +16,7 @@ from functools import wraps
 import re
 import io
 
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, get_flashed_messages
 from werkzeug.security import check_password_hash
 
 from database import get_db, init_db
@@ -63,6 +63,97 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route("/demande", methods=["GET", "POST"])
+def demande():
+    if "demande_token" not in session:
+        session["demande_token"] = secrets.token_urlsafe(24)
+
+    db = get_db()
+
+    if request.method == "POST":
+        d = request.form
+        guest_name = d.get("guest_name", "").strip()
+        email = d.get("email", "").strip()
+        phone = d.get("phone", "").strip()
+        room_type = d.get("room_type", "")
+        check_in = d.get("check_in", "")
+        check_out = d.get("check_out", "")
+        guests_count_raw = d.get("guests_count", "2").strip()
+        special_requests = d.get("special_requests", "").strip()
+        room_types = {"Chambre classique", "Chambre supérieure", "Suite"}
+
+        error = None
+        if not guest_name or not email or not phone or room_type not in room_types or not check_in or not check_out:
+            error = "Veuillez remplir tous les champs obligatoires."
+        elif not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+            error = "Veuillez saisir une adresse e-mail valide."
+        else:
+            try:
+                debut = datetime.strptime(check_in, "%Y-%m-%d").date()
+                fin = datetime.strptime(check_out, "%Y-%m-%d").date()
+            except ValueError:
+                error = "Veuillez saisir des dates valides."
+            else:
+                if debut < date.today():
+                    error = "La date d’arrivée ne peut pas être dans le passé."
+                elif fin <= debut:
+                    error = "La date de départ doit être postérieure à la date d’arrivée."
+
+        if error is None:
+            try:
+                guests_count = int(guests_count_raw)
+            except ValueError:
+                guests_count = 0
+            if not 1 <= guests_count <= 12:
+                error = "Le nombre de voyageurs doit être compris entre 1 et 12."
+
+        if error:
+            db.close()
+            flash(error, "error")
+            session["demande_form"] = d.to_dict()
+            return redirect(url_for("demande"))
+
+        db.execute(
+            """INSERT INTO demande_reservation
+               (public_token, guest_name, email, phone, room_type, check_in, check_out,
+                guests_count, special_requests, status, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                session["demande_token"],
+                guest_name[:100],
+                email[:150],
+                phone[:40],
+                room_type,
+                check_in,
+                check_out,
+                guests_count,
+                special_requests[:500],
+                "En attente",
+                datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            ),
+        )
+        db.commit()
+        db.close()
+        flash("Demande enregistrée. Elle reste en attente de confirmation par l’hôtel.", "success")
+        return redirect(url_for("demande"))
+
+    demandes = db.execute(
+        """SELECT * FROM demande_reservation
+           WHERE public_token = ?
+           ORDER BY check_in DESC, id_demande DESC""",
+        (session["demande_token"],),
+    ).fetchall()
+    db.close()
+    form_data = session.pop("demande_form", {})
+    return render_template(
+        "demande.html",
+        demandes=demandes,
+        form_data=form_data,
+        messages=get_flashed_messages(with_categories=True),
+        today=date.today().isoformat(),
+    )
 
 
 # ---------------------------------------------------------------------------
